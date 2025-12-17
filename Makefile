@@ -2,7 +2,8 @@ CLUSTER_NAME=ebpf-scale
 KIND_VERSION=v0.23.0
 HELM_VERSION=v3.19.4
 
-.PHONY: dev-up dev-down deps kind-up kind-down obs-up metrics-server-up kind-install helm-install
+.PHONY: dev-up dev-down deps kind-up kind-down obs-up metrics-server-up kind-install helm-install \
+	collector-build collector-load collector-up collector-down
 
 dev-up: deps kind-up metrics-server-up obs-up
 	@echo "✅ Cluster + monitoring listos"
@@ -48,3 +49,15 @@ obs-up:
 	kubectl create ns monitoring --dry-run=client -o yaml | kubectl apply -f -
 	helm upgrade --install kps prometheus-community/kube-prometheus-stack -n monitoring -f infra/helm/kps-values.yaml
 	helm upgrade --install prom-adapter prometheus-community/prometheus-adapter -n monitoring -f infra/helm/adapter-values.yaml
+
+collector-build:
+	docker build -t collector-ebpf:dev ./collector-ebpf
+
+collector-load:
+	kind load docker-image collector-ebpf:dev --name $(CLUSTER_NAME)
+
+collector-up: collector-build collector-load
+	kubectl apply -f infra/k8s/collector-ebpf
+
+collector-down:
+	kubectl delete -f infra/k8s/collector-ebpf --ignore-not-found

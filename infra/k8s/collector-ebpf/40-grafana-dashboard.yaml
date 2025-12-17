@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-collector-ebpf
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  collector-ebpf.json: |
+    {
+      "title": "collector-ebpf (base)",
+      "schemaVersion": 39,
+      "version": 1,
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "queue_depth p95",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(queue_depth_bucket[1m])) by (le, namespace, pod, service))"
+            }
+          ],
+          "gridPos": {"x":0,"y":0,"w":24,"h":8}
+        },
+        {
+          "type": "timeseries",
+          "title": "runqueue_latency_ms p95",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(runqueue_latency_ms_bucket[1m])) by (le, namespace, pod, service))"
+            }
+          ],
+          "gridPos": {"x":0,"y":8,"w":24,"h":8}
+        },
+        {
+          "type": "timeseries",
+          "title": "tcp_rtt_ms p95",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(tcp_rtt_ms_bucket[1m])) by (le, namespace, pod, service))"
+            }
+          ],
+          "gridPos": {"x":0,"y":16,"w":24,"h":8}
+        }
+      ]
+    }

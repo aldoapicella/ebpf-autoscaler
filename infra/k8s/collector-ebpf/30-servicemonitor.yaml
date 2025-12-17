@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: collector-ebpf
+  namespace: monitoring
+  labels:
+    release: kps
+spec:
+  namespaceSelector:
+    matchNames:
+    - ebpf
+  selector:
+    matchLabels:
+      app: collector-ebpf
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 10s
