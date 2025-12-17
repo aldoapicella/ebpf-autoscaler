@@ -1,0 +1,3 @@
+prometheus:
+  url: http://kps-kube-prometheus-stack-prometheus.monitoring.svc
+  port: 9090
