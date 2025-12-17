@@ -1,13 +1,34 @@
 CLUSTER_NAME=ebpf-scale
+KIND_VERSION=v0.23.0
+HELM_VERSION=v3.19.4
 
-.PHONY: dev-up dev-down kind-up kind-down obs-up metrics-server-up
+.PHONY: dev-up dev-down deps kind-up kind-down obs-up metrics-server-up kind-install helm-install
 
-dev-up: kind-up metrics-server-up obs-up
+dev-up: deps kind-up metrics-server-up obs-up
 	@echo "✅ Cluster + monitoring listos"
 	@kubectl get nodes
 	@kubectl -n monitoring get pods
 
 dev-down: kind-down
+
+deps: kind-install helm-install
+
+kind-install:
+	command -v kind >/dev/null 2>&1 || { \
+		curl -Lo /tmp/kind https://kind.sigs.k8s.io/dl/$(KIND_VERSION)/kind-linux-amd64; \
+		chmod +x /tmp/kind; \
+		sudo mv /tmp/kind /usr/local/bin/kind; \
+		echo "kind $(KIND_VERSION) instalado"; \
+	}
+
+helm-install:
+	command -v helm >/dev/null 2>&1 || { \
+		curl -Lo /tmp/helm.tar.gz https://get.helm.sh/helm-$(HELM_VERSION)-linux-amd64.tar.gz; \
+		tar -xzf /tmp/helm.tar.gz -C /tmp; \
+		sudo mv /tmp/linux-amd64/helm /usr/local/bin/helm; \
+		rm -rf /tmp/linux-amd64 /tmp/helm.tar.gz; \
+		echo "helm $(HELM_VERSION) instalado"; \
+	}
 
 kind-up:
 	kind create cluster --name $(CLUSTER_NAME) --config infra/kind/kind.yaml
