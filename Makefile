@@ -2,8 +2,12 @@ CLUSTER_NAME=ebpf-scale
 KIND_VERSION=v0.23.0
 HELM_VERSION=v3.19.4
 
+# eBPF build inputs
+VMLINUX_BTF ?= /sys/kernel/btf/vmlinux
+VMLINUX_H := collector-ebpf/bpf/vmlinux.h
+
 .PHONY: dev-up dev-down deps kind-up kind-down obs-up metrics-server-up kind-install helm-install \
-	collector-build collector-load collector-up collector-down
+	collector-build collector-load collector-up collector-down bpf-deps
 
 dev-up: deps kind-up metrics-server-up obs-up
 	@echo "✅ Cluster + monitoring listos"
@@ -12,7 +16,18 @@ dev-up: deps kind-up metrics-server-up obs-up
 
 dev-down: kind-down
 
-deps: kind-install helm-install
+deps: kind-install helm-install bpf-deps
+
+# Install bpftool/clang if missing (for vmlinux.h generation and bpf2go)
+bpf-deps:
+	command -v bpftool >/dev/null 2>&1 || { \
+		sudo apt-get update && \
+		sudo apt-get install -y linux-tools-$$(uname -r) linux-cloud-tools-$$(uname -r) linux-tools-common; \
+	}
+	command -v clang >/dev/null 2>&1 || { \
+		sudo apt-get update && \
+		sudo apt-get install -y clang llvm libbpf-dev gcc make; \
+	}
 
 kind-install:
 	command -v kind >/dev/null 2>&1 || { \
@@ -50,7 +65,12 @@ obs-up:
 	helm upgrade --install kps prometheus-community/kube-prometheus-stack -n monitoring -f infra/helm/kps-values.yaml
 	helm upgrade --install prom-adapter prometheus-community/prometheus-adapter -n monitoring -f infra/helm/adapter-values.yaml
 
-collector-build:
+$(VMLINUX_H):
+	@test -r $(VMLINUX_BTF) || { echo "Missing $(VMLINUX_BTF); ensure host BTF is available (CONFIG_DEBUG_INFO_BTF)"; exit 1; }
+	@echo "Generating $(VMLINUX_H) from $(VMLINUX_BTF)"
+	@bpftool btf dump file $(VMLINUX_BTF) format c > $(VMLINUX_H)
+
+collector-build: bpf-deps $(VMLINUX_H)
 	docker build -t collector-ebpf:dev ./collector-ebpf
 
 collector-load:

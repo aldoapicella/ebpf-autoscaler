@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -9,8 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cilium/ebpf/rlimit"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/aldo/ebpf-autoscaler/collector-ebpf/internal/runqueue"
 )
 
 func mustNodeName() string {
@@ -42,7 +46,12 @@ func readLoad1() float64 {
 }
 
 func main() {
+	ctx := context.Background()
 	node := mustNodeName()
+
+	if err := rlimit.RemoveMemlock(); err != nil {
+		log.Printf("warning: memlock not raised: %v", err)
+	}
 
 	const ns = "__node__"
 	const svc = "__node__"
@@ -56,7 +65,7 @@ func main() {
 
 	runqLat := prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "runqueue_latency_ms",
-		Help:    "CPU runqueue latency in ms (dummy for plumbing; will be eBPF-backed).",
+		Help:    "CPU runqueue latency in ms (eBPF: sched_wakeup->sched_switch ringbuf).",
 		Buckets: []float64{0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 50, 100, 200},
 	}, []string{"namespace", "pod", "service"})
 
@@ -68,19 +77,24 @@ func main() {
 
 	prometheus.MustRegister(queueDepth, runqLat, tcpRTT)
 
+	// Dummy signals still drive queue_depth and tcp_rtt_ms; runqueue_latency_ms comes from eBPF.
 	go func() {
 		t := time.NewTicker(1 * time.Second)
 		defer t.Stop()
 		for range t.C {
 			load := readLoad1()
 			q := load * 10
-			lat := (load * 2) + 0.5
 			rtt := 1.0 + (0.1 * load)
 			queueDepth.WithLabelValues(ns, pod, svc).Observe(q)
-			runqLat.WithLabelValues(ns, pod, svc).Observe(lat)
 			tcpRTT.WithLabelValues(ns, pod, svc).Observe(rtt)
 		}
 	}()
+
+	if err := runqueue.Start(ctx, runqLat, func() (string, string, string) {
+		return ns, pod, svc
+	}); err != nil {
+		log.Printf("runqueue disabled (continuing without it): %v", err)
+	}
 
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", promhttp.Handler())

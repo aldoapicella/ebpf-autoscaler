@@ -1,0 +1,3 @@
+# Generated eBPF artifacts
+collector-ebpf/ebpf/*.o
+collector-ebpf/bpf/vmlinux.h

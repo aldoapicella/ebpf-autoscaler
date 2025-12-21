@@ -23,7 +23,18 @@ data:
           "gridPos": {"x":0,"y":0,"w":24,"h":8}
         },
         {
+        },
+        {
           "type": "timeseries",
+          "title": "runqueue events per second",
+          "description": "sanity: non-zero means raw tracepoints are firing",
+          "targets": [
+            {
+              "expr": "sum(rate(runqueue_latency_ms_count[1m]))"
+            }
+          ],
+          "gridPos": {"x":0,"y":24,"w":24,"h":6}
+        }
           "title": "runqueue_latency_ms p95",
           "targets": [
             {
